@@ -118,8 +118,15 @@ def setup_and_parse(parser):
     return args
 
 def strip(phone):
-    """Remove all non-numeric digits."""
-    return re.sub('[^\d]', '', phone)
+    """Remove all non-numeric digits in phone string."""
+    if phone:
+        return re.sub('[^\d]', '', phone)
+
+def trunc(phone):
+    """Strip phone, then truncate it.  Return last 10 digits"""
+    if phone:
+        ph = strip(phone)
+        return ph[-10:]
 
 def format_phone(phone):
     """
@@ -291,39 +298,45 @@ def question_marks_placeholder(num):
 
 def build_msg_query(numbers):
     """
-    Build the query for SMS messages.
+    Build the query for SMS and iMessage messages.
     
     If `numbers` is not None, that means we're querying for a subset 
-    of messages. First, we need to find the group_id associated with 
-    each phone number. Then, we select from the message table using a 
-    `WHERE IN (list of group_ids)` clause.
+    of messages. Phone number is in `address` field for SMS messages, 
+    and in `madrid_handle` for iMessage.
     
-    If `numbers` is None (or we don't find any group_ids), then we 
-    select all messages.
+    Because of inconsistently formatted phone numbers, we run 
+    passed-in numbers and numbers in DB through trunc() before 
+    comparing them.
+    
+    If `numbers` is None, then we select all messages.
     
     Returns: query (string), params (tuple)
     """
-    # Match numbers to group_ids
-    group_ids = []
+    query = """\
+SELECT 
+    rowid, 
+    date, 
+    address, 
+    text, 
+    flags, 
+    group_id, 
+    is_madrid, 
+    madrid_handle, 
+    madrid_flags 
+FROM message """
+    # Build up the where clause, if limiting query by phone.
+    params = []
+    or_clauses = []
     if numbers:
         for n in numbers:
-            gids = query_group_ids(n)
-            if gids: 
-                group_ids.extend(gids)
-            
-    if group_ids:
-        qmarks = question_marks_placeholder(len(group_ids))
-        query = ("select rowid, date, address, text, flags, group_id "
-                 "from message "
-                 "where group_id in (%s) "
-                 "order by rowid" % (qmarks))
-        params = tuple(group_ids)
-    else:
-        query = ("select rowid, date, address, text, flags, group_id "
-                 "from message "
-                 "order by rowid")
-        params = ()
-    return query, params
+            or_clauses.append("TRUNC(address) = ?")
+            or_clauses.append("TRUNC(madrid_handle) = ?")
+            params.extend([trunc(n), trunc(n)])
+    if or_clauses:
+        where = "\nWHERE " + "\nOR ".join(or_clauses)
+        query = query + where
+    query = query + "\nORDER by rowid"
+    return query, tuple(params)
 
 def convert_date(unix_date, format):
     """Convert unix epoch time string to formatted date string."""
@@ -478,6 +491,7 @@ def main():
     
         conn = sqlite3.connect(COPY_DB)
         conn.row_factory = sqlite3.Row
+        conn.create_function("TRUNC", 1, trunc)
         cur = conn.cursor()
         cur.execute(query, params)
         logging.info("Run query: %s" % (query))
