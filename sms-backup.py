@@ -481,7 +481,7 @@ def main():
         cur = conn.cursor()
         cur.execute(query, params)
         logging.info("Run query: %s" % (query))
-        logging.info("With query params: (%s)" % (params if params else ''))
+        logging.info("With query params: %s" % (params,))
     
         messages = []
         for row in cur:
