@@ -235,56 +235,22 @@ def copy_sms_db(db):
         copy.close()
     return copy.name
 
-def query_group_ids(phone):
-    """
-    Find group_ids that match phone in group_member table.
-    
-    The 'address' field in group_member is inconsistently formatted.
-    The same number could be represented as '(555) 555-1212', or
-    '+15555551212', or '5555551212'.
-    
-    To query for matches, we'll perform a LIKE query between the last 
-    10 digits of the stripped phone and the stripped address field.
-    
-    Return list of group_ids.
-    """
-    ph = strip(phone)
-    conn = sqlite3.connect(COPY_DB)
-    conn.create_function("STRIP", 1, strip)
-    cur = conn.cursor()
-    
-    query = "select group_id from group_member where STRIP(address) like ?"
-    params = ('%'+ph[-10:],)
-    cur.execute(query, params)
-    result = cur.fetchall()
-    conn.close()
-    if result:
-        group_ids = [r[0] for r in result]
-    else:
-        group_ids = None
-        logging.warning("Phone number not found: %s" % phone)
-    return group_ids
-
 def alias_map(aliases):
     """
-    Map aliases to group_ids.
+    Return dict that maps phone numbers to aliases.
     
-    For each alias ("number=name"), use number to look up group_ids
-    in group_member table.
-    
-    Return dictionary, where key = group_id, value = alias.
+    Split .ini-style strings in aliases: key = truncated phone number, 
+    value = alias.
     """
-    result = {}
+    amap = {}
     if aliases:
         for a in aliases:
             m = re.search('^([^=]+)=([^=]+)$', a)
-            number = m.group(1)
+            number = trunc(m.group(1))
             name = m.group(2)
-            group_ids = query_group_ids(number)
-            if group_ids:
-                for gid in group_ids:
-                    result[gid] = name.decode('utf-8')
-    return result
+            amap[number] = name.decode('utf-8')
+    print amap
+    return amap
 
 def question_marks_placeholder(num):
     """
