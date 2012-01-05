@@ -481,29 +481,31 @@ def msgs_human(messages, header):
     Width of 'from' and 'to' columns is determined by widest column value
     in messages, so columns align.
     """
-    # Figure out column widths 
-    max_from = max([len(x['from']) for x in messages])
-    max_to = max([len(x['to']) for x in messages])
-    max_date = max([len(x['date']) for x in messages])
+    output = ""
+    if messages:
+        # Figure out column widths 
+        max_from = max([len(x['from']) for x in messages])
+        max_to = max([len(x['to']) for x in messages])
+        max_date = max([len(x['date']) for x in messages])
     
-    from_width = max(max_from, len('From'))
-    to_width = max(max_to, len('To'))
-    date_width = max(max_date, len('Date'))
+        from_width = max(max_from, len('From'))
+        to_width = max(max_to, len('To'))
+        date_width = max(max_date, len('Date'))
     
-    msgs = []
-    if header:
-        htemplate = u"{0:{1}} | {2:{3}} | {4:{5}} | {6}"
-        hrow = htemplate.format('Date', date_width, 'From', from_width, 
-                               'To', to_width, 'Text')
-        msgs.append(hrow)
-    for m in messages:
-        template = u"{0:{1}} | {2:>{3}} | {4:>{5}} | {6}"
-        msg = template.format(m['date'], date_width, m['from'], from_width, 
-                              m['to'], to_width, m['text'])
-        msgs.append(msg)
-    msgs.append('')
-    result = '\n'.join(msgs).encode('utf-8')
-    return result
+        msgs = []
+        if header:
+            htemplate = u"{0:{1}} | {2:{3}} | {4:{5}} | {6}"
+            hrow = htemplate.format('Date', date_width, 'From', from_width, 
+                                   'To', to_width, 'Text')
+            msgs.append(hrow)
+        for m in messages:
+            template = u"{0:{1}} | {2:>{3}} | {4:>{5}} | {6}"
+            msg = template.format(m['date'], date_width, m['from'], from_width, 
+                                  m['to'], to_width, m['text'])
+            msgs.append(msg)
+        msgs.append('')
+        output = '\n'.join(msgs).encode('utf-8')
+    return output
 
 def msgs_csv(messages, header):
     """Return messages in .csv format."""
