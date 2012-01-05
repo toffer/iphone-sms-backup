@@ -148,6 +148,13 @@ def format_phone(phone):
         phone = "(%s) %s-%s" % (ph[-10:-7], ph[-7:-4], ph[-4:])
     return phone.decode('utf-8')
 
+def format_address(address):
+    """If address is email, leave alone.  Otherwise, call format_phone()."""
+    m = re.search('@', address)     # No @ sign?  Must be phone number!
+    if not m:
+        address = format_phone(address)
+    return address
+
 def valid_phone(phone):
     """
     Simple validation of phone. It is considered a valid phone number if 
@@ -249,18 +256,7 @@ def alias_map(aliases):
             number = trunc(m.group(1))
             name = m.group(2)
             amap[number] = name.decode('utf-8')
-    print amap
     return amap
-
-def question_marks_placeholder(num):
-    """
-    Return comma-separated string of question marks, to 
-    be used as a placeholder in the `WHERE IN` clause of query.
-    """
-    qmarks = []
-    for n in range(num):
-        qmarks.append("?")
-    return ', '.join(qmarks)
 
 def build_msg_query(numbers):
     """
@@ -278,7 +274,7 @@ def build_msg_query(numbers):
     
     Returns: query (string), params (tuple)
     """
-    query = """\
+    query = """
 SELECT 
     rowid, 
     date, 
@@ -286,9 +282,12 @@ SELECT
     text, 
     flags, 
     group_id, 
-    is_madrid, 
     madrid_handle, 
-    madrid_flags 
+    madrid_flags,
+    madrid_error,
+    is_madrid, 
+    madrid_date_read,
+    madrid_date_delivered
 FROM message """
     # Build up the where clause, if limiting query by phone.
     params = []
@@ -304,35 +303,94 @@ FROM message """
     query = query + "\nORDER by rowid"
     return query, tuple(params)
 
+def fix_imessage_date(seconds):
+    """
+    Convert seconds to unix epoch time.
+    
+    iMessage dates are not standard unix time.  They begin at midnight on 
+    2001-01-01, instead of the usual 1970-01-01.
+    
+    To convert to unix time, add 978,307,200 seconds!
+    
+    Source: http://d.hatena.ne.jp/sak_65536/20111017/1318829688
+    (Thanks, Google Translate!)
+    """
+    return seconds + 978307200
+
+def imessage_date(row):
+    """
+    Return date for iMessage.
+    
+    iMessage messages have 2 dates: madrid_date_read and
+    madrid_date_delivered. Only one is set for each message, so find the
+    non-zero one, fix it so it is standard unix time, and return it.
+    """
+    if row['madrid_date_read'] == 0:
+        im_date = row['madrid_date_delivered']
+    else:
+        im_date = row['madrid_date_read']
+    return fix_imessage_date(im_date)
+
 def convert_date(unix_date, format):
     """Convert unix epoch time string to formatted date string."""
     dt = datetime.fromtimestamp(int(unix_date))
     ds = dt.strftime(format)
     return ds.decode('utf-8')
 
-def convert_address(row, me, alias_map):
+def convert_address_imessage(row, me, alias_map):
     """
-    Take the address from row (a sqlite3.Row) and return 
-    a tuple of address strings: (from_addr, to_addr).
+    Find the iMessage address in row (a sqlite3.Row) and return a tuple of
+    address strings: (from_addr, to_addr).
     
-    Row only has one address field, but I want address strings for two 
-    identities: 'me' and 'other' person I'm texting.
+    In an iMessage message, the address could be an email or a phone number,
+    and is found in the `madrid_handle` field.
     
-    'me' is passed in value.
+    Next, look for alias in alias_map.  Otherwise, use formatted address.
     
-    'other' is either a name from alias_map (if address has alias), 
-        OR 'address' as a formatted phone number (default).
+    Use `madrid_flags` to determine direction of the message:
+        36869 = 'incoming'
+        12289 = 'outgoing'
+    """
+    if isinstance(me, str): 
+        me = me.decode('utf-8')
         
-    'flags' tells us direction of message:
+    tr_address = trunc(row['madrid_handle'])
+    if tr_address in alias_map:
+        other = alias_map[tr_address]
+    else:
+        other = format_address(row['madrid_handle'])
+        
+    if row['madrid_flags'] == 36869:
+        from_addr = other
+        to_addr = me
+    elif row['madrid_flags'] == 12289:
+        from_addr = me
+        to_addr = other
+        
+    return (from_addr, to_addr)
+
+def convert_address_sms(row, me, alias_map):
+    """
+    Find the sms address in row (a sqlite3.Row) and return a tuple of address
+    strings: (from_addr, to_addr). 
+    
+    In an SMS message, the address is always a phone number and is found in
+    the `address` field.
+    
+    Next, look for alias in alias_map.  Otherwise, use formatted address.
+    
+    Use `flags` to determine direction of the message:
         2 = 'incoming'
         3 = 'outgoing'
     """
-    if isinstance(me, str): me = me.decode('utf-8')
-    address = format_phone(row['address'])
-    if alias_map and row['group_id'] in alias_map:
-        other = alias_map[row['group_id']]
+    if isinstance(me, str): 
+        me = me.decode('utf-8')
+    
+    tr_address = trunc(row['address'])
+    if tr_address in alias_map:
+        other = alias_map[tr_address]
     else:
-        other = address
+        other = format_phone(row['address'])
         
     if row['flags'] == 2:
         from_addr = other
@@ -343,8 +401,8 @@ def convert_address(row, me, alias_map):
         
     return (from_addr, to_addr)
 
-def skip_row(row):
-    """Return True, if row should be skipped."""
+def skip_sms(row):
+    """Return True, if sms row should be skipped."""
     retval = False
     if row['flags'] not in (2, 3):
         logging.info("Skipping msg (%s) not sent. Address: %s. Text: %s." % \
@@ -354,6 +412,25 @@ def skip_row(row):
         logging.info("Skipping msg (%s) without address. "
                         "Text: %s" % (row['rowid'], row['text']))
         retval = True
+    elif not row['text']:
+        logging.info("Skipping msg (%s) without text. Address: %s" % \
+                        (row['rowid'], row['address']))
+        retval = True
+    return retval
+
+def skip_imessage(row):
+    """Return True, if iMessage row should be skipped."""
+    retval = False
+    if row['madrid_error'] != 0:
+        logging.info("Skipping msg (%s) with error code %s. Address: %s. "
+                        "Text: %s." % (row['rowid'], row['madrid_error'], 
+                        row['address'], row['text']))
+        retval = True
+    # Is this ever true with iMessage message?
+    # elif not row['madrid_handle']:
+    #     logging.info("Skipping msg (%s) without address. "
+    #                     "Text: %s" % (row['rowid'], row['text']))
+    #     retval = True
     elif not row['text']:
         logging.info("Skipping msg (%s) without text. Address: %s" % \
                         (row['rowid'], row['address']))
@@ -465,10 +542,17 @@ def main():
     
         messages = []
         for row in cur:
-            if skip_row(row): continue
-            fmt_date = convert_date(row['date'], args.date_format)
-            fmt_from, fmt_to = convert_address(row, args.identity, aliases)
-            fmt_text = row['text']
+            if row['is_madrid'] == 1:
+                if skip_imessage(row): continue
+                im_date = imessage_date(row)
+                fmt_date = convert_date(im_date, args.date_format)
+                fmt_from, fmt_to = convert_address_imessage(row, args.identity, aliases)
+                fmt_text = row['text']
+            else:
+                if skip_sms(row): continue
+                fmt_date = convert_date(row['date'], args.date_format)
+                fmt_from, fmt_to = convert_address_sms(row, args.identity, aliases)
+                fmt_text = row['text']
             msg = {'date': fmt_date,
                    'from': fmt_from, 
                    'to': fmt_to,
