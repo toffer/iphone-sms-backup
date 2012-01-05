@@ -157,13 +157,22 @@ def format_address(address):
 
 def valid_phone(phone):
     """
-    Simple validation of phone. It is considered a valid phone number if 
-    it has at least 5 digits, after stripping all non-numeric digits.
+    Simple validation of phone number. 
+    
+    It is considered a valid phone number if: 
+        * It does not contain any letters
+        * It does not contain the '@' sign
+        * It has at least 3 digits, after stripping all non-numeric digits.
     
     Returns True if valid, False if not.
     """
-    stripped = strip(phone)
-    return True if len(stripped) >= 5 else False
+    ret_val = False
+    phone_match = re.search('^[^a-zA-Z@]+$', phone)
+    if phone_match:
+        stripped = strip(phone)
+        if len(stripped) >= 3:
+            ret_val = True
+    return ret_val
 
 def validate_aliases(aliases):
     """Raise exception if any alias is not in 'valid_number = name' format."""
