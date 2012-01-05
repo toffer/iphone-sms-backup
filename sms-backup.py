@@ -97,6 +97,12 @@ def setup_and_parse(parser):
             help="Name of output file. Optional. Default "
                  "(if not present): Output to STDOUT.")
                  
+    output_group.add_argument("-e", "--email", action="append",
+            dest="emails", metavar="EMAIL",
+            help="Limit output to iMessage messages to/from this email "
+                 "address. Can be used multiple times. Optional. Default (if "
+                 "not present): All iMessages included.")
+    
     output_group.add_argument("-p", "--phone", action="append",
             dest="numbers", metavar="PHONE",
             help="Limit output to sms messages to/from this phone number. "
@@ -175,16 +181,20 @@ def valid_phone(phone):
     return ret_val
 
 def validate_aliases(aliases):
-    """Raise exception if any alias is not in 'valid_number = name' format."""
+    """Raise exception if any alias is not in 'address = name' format."""
     if aliases:
         for a in aliases:
             # Only one equal sign allowed!
             m = re.search('^([^=]+)=[^=]+$', a)
             if not m:
                 raise ValueError("OPTION ERROR: Invalid --alias format. "
-                                 "Should be 'number = name'.")
-            elif not valid_phone(m.group(1)):
-                raise ValueError("OPTION ERROR: Invalid number in --alias.")
+                                 "Should be 'address = name'.")
+            key = m.group(1)
+            phone_match = re.search('^[^@]+$', key)     # No @ sign = phone!
+            if phone_match:
+                if not valid_phone(key):
+                    raise ValueError("OPTION ERROR: Invalid phone number "
+                                     "in --alias.")
 
 def validate_numbers(numbers):
     """Raise exception if invalid phone number found."""
@@ -253,31 +263,35 @@ def copy_sms_db(db):
 
 def alias_map(aliases):
     """
-    Return dict that maps phone numbers to aliases.
+    Convert .ini-style aliases to dict.
     
-    Split .ini-style strings in aliases: key = truncated phone number, 
-    value = alias.
+    Key: phone number or email address.  (We truncate phone numbers for 
+         consistent formatting.)
+    Value: Alias
     """
     amap = {}
     if aliases:
         for a in aliases:
             m = re.search('^([^=]+)=([^=]+)$', a)
-            number = trunc(m.group(1))
-            name = m.group(2)
-            amap[number] = name.decode('utf-8')
+            key = m.group(1)
+            alias = m.group(2)
+            # Is key an email address?
+            m2 = re.search('@', key)
+            if not m2:
+                key = trunc(key) 
+            amap[key] = alias.decode('utf-8')
     return amap
 
-def build_msg_query(numbers):
+def build_msg_query(numbers, emails):
     """
     Build the query for SMS and iMessage messages.
     
-    If `numbers` is not None, that means we're querying for a subset 
-    of messages. Phone number is in `address` field for SMS messages, 
-    and in `madrid_handle` for iMessage.
+    If `numbers` or `emails` is not None, that means we're querying for a
+    subset of messages. Phone number is in `address` field for SMS messages,
+    and in `madrid_handle` for iMessage. Email is only in `madrid_handle`.
     
-    Because of inconsistently formatted phone numbers, we run 
-    passed-in numbers and numbers in DB through trunc() before 
-    comparing them.
+    Because of inconsistently formatted phone numbers, we run both passed-in
+    numbers and numbers in DB through trunc() before comparing them.
     
     If `numbers` is None, then we select all messages.
     
@@ -306,6 +320,10 @@ FROM message """
             or_clauses.append("TRUNC(address) = ?")
             or_clauses.append("TRUNC(madrid_handle) = ?")
             params.extend([trunc(n), trunc(n)])
+    if emails:
+        for e in emails:
+            or_clauses.append("madrid_handle = ?")
+            params.append(e)
     if or_clauses:
         where = "\nWHERE " + "\nOR ".join(or_clauses)
         query = query + where
@@ -363,9 +381,15 @@ def convert_address_imessage(row, me, alias_map):
     if isinstance(me, str): 
         me = me.decode('utf-8')
         
-    tr_address = trunc(row['madrid_handle'])
-    if tr_address in alias_map:
-        other = alias_map[tr_address]
+    # If madrid_handle is phone number, have to truncate it.
+    email_match = re.search('@', row['madrid_handle'])
+    if email_match:
+        handle = row['madrid_handle']
+    else:
+        handle = trunc(row['madrid_handle'])
+    
+    if handle in alias_map:
+        other = alias_map[handle]
     else:
         other = format_address(row['madrid_handle'])
         
@@ -539,7 +563,7 @@ def main():
         COPY_DB = copy_sms_db(ORIG_DB)
         
         aliases = alias_map(args.aliases)
-        query, params = build_msg_query(args.numbers)
+        query, params = build_msg_query(args.numbers, args.emails)
     
         conn = sqlite3.connect(COPY_DB)
         conn.row_factory = sqlite3.Row
