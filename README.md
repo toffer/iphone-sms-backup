@@ -1,14 +1,14 @@
 Description
 ===========
-Backup your iPhone SMS text messages.
+Backup your iPhone SMS and iMessage text messages.
 
 Why? 
 ---- 
-Your iPhone stores a copy of all your SMS text messages in a sqlite database.
-But, if you want to view them all on your iPhone, it's not so easy. Be
-prepared to do a lot of scrolling.
+Your iPhone stores a copy of all your SMS and iMessage text messages in a
+sqlite database. But, if you want to view them all on your iPhone, it's not so
+easy. Be prepared to do a lot of scrolling.
 
-Or, you can you use `sms-backup.py` to backup all your SMS messages in text
+Or, you can you use `sms-backup.py` to backup all your messages in text
 format, CSV format, or JSON, and then view them in the data viewer of your
 choice.
 
@@ -72,8 +72,8 @@ Examples
 Usage
 =====
     usage: sms-backup.py [-h] [-q] [-a PHONE=NAME] [-d FORMAT]
-                         [-f {human,csv,json}] [-m NAME] [-o FILE] [-p PHONE]
-                         [--no-header] [-i FILE]
+                         [-f {human,csv,json}] [-m NAME] [-o FILE] [-e EMAIL]
+                         [-p PHONE] [--no-header] [-i FILE]
 
     optional arguments:
       -h, --help            show this help message and exit
@@ -100,6 +100,10 @@ Usage
       -o FILE, --output FILE
                             Name of output file. Optional. Default (if not
                             present): Output to STDOUT.
+      -e EMAIL, --email EMAIL
+                            Limit output to iMessage messages to/from this email
+                            address. Can be used multiple times. Optional. Default
+                            (if not present): All iMessages included.
       -p PHONE, --phone PHONE
                             Limit output to sms messages to/from this phone
                             number. Can be used multiple times. Optional. Default
@@ -112,6 +116,7 @@ Usage
       -i FILE, --input FILE
                             Name of SMS db file. Optional. Default: Script will
                             find and use db in standard backup location.
+
 
 Notes on the SMS Database
 =========================
@@ -127,7 +132,7 @@ Domain.
     $ printf 'HomeDomain-Library/SMS/sms.db' | openssl sha1
     3d0d7e5fb2ce288813306e4d4636395e047a3d28
 
-The schema of the two key tables: `message` and `group_member`:
+The schema of the key table: `message`:
 
     CREATE TABLE message 
         (ROWID INTEGER PRIMARY KEY AUTOINCREMENT, 
@@ -146,28 +151,62 @@ The schema of the two key tables: `message` and `group_member`:
          country TEXT, 
          headers BLOB, 
          recipients BLOB, 
-         read INTEGER);
+         read INTEGER,
+         madrid_attributedBody BLOB, 
+         madrid_handle TEXT, 
+         madrid_version INTEGER, 
+         madrid_guid TEXT, 
+         madrid_type INTEGER, 
+         madrid_roomname TEXT, 
+         madrid_service TEXT, 
+         madrid_account TEXT, 
+         madrid_flags INTEGER, 
+         madrid_attachmentInfo BLOB, 
+         madrid_url TEXT, 
+         madrid_error INTEGER, 
+         is_madrid INTEGER, 
+         madrid_date_read INTEGER, 
+         madrid_date_delivered INTEGER, 
+         madrid_account_guid TEXT);
 
-     CREATE TABLE group_member 
-         (ROWID INTEGER PRIMARY KEY AUTOINCREMENT, 
-          group_id INTEGER, 
-          address TEXT, 
-          country TEXT);
+The schema has changed dramatically with the introduction of iMessage in iOS5.
+All of the `*madrid*` fields are new, and these are used for storing iMessage
+messages.
 
-The `address` (phone number) in `message` is inconsistently formatted. Numbers
-can appear as (555) 555-1212, or 15555551212, or +15555551212. That's one
-reason why I decided to query on `group_id`.
+SMS Messages
+------------
+The `address` field contains the phone number to which you are sending a SMS
+message, but it is inconsistently formatted. Numbers can appear as (555)
+555-1212, or 15555551212, or +15555551212. (For this reason, I normalize phone
+numbers before attempting to match them.)
 
-The `flags` field shows whether a message was sent or received by the iPhone:
+The `flags` field shows whether an SMS message was sent or received by the
+iPhone:
 
     2 - Message received by iPhone from address
     3 - Message sent from iPhone to address
+    
+iMessage Messages
+-----------------
+The `madrid_handle` field contains either a phone number or email address to
+which you are sending an iMessage message.
+
+The `madrid_flags` field shows whether iMessage message was sent or received
+by the iPhone:
+
+    36869 - Message received by iPhone from address
+    12289 - Message sent from iPhone to address
 
 More Reading
 ------------
   * http://www.slideshare.net/hrgeeks/iphone-forensics-without-the-iphone
   * http://damon.durandfamily.org/archives/000487.html
   * http://linuxsleuthing.blogspot.com/2011/02/parsing-iphone-sms-database.html
+  * http://www.scip.ch/?labs.20111103
+  * http://d.hatena.ne.jp/sak_65536/20111017/1318829688
+  
+(The last two links are good for iOS5 schema discussions.  Google Translate
+was a big help here!)
  
 Known Limitations
 =================
@@ -178,6 +217,8 @@ Known Limitations
   * Assumes encoding of texts is 'utf-8'...and there's no way to change it.
     
   * Does not try to recover texts with photos.  Just skips past them.
+  
+  * Does not handle group chats.
 
 License
 =======

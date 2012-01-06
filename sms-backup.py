@@ -97,6 +97,12 @@ def setup_and_parse(parser):
             help="Name of output file. Optional. Default "
                  "(if not present): Output to STDOUT.")
                  
+    output_group.add_argument("-e", "--email", action="append",
+            dest="emails", metavar="EMAIL",
+            help="Limit output to iMessage messages to/from this email "
+                 "address. Can be used multiple times. Optional. Default (if "
+                 "not present): All iMessages included.")
+    
     output_group.add_argument("-p", "--phone", action="append",
             dest="numbers", metavar="PHONE",
             help="Limit output to sms messages to/from this phone number. "
@@ -118,8 +124,15 @@ def setup_and_parse(parser):
     return args
 
 def strip(phone):
-    """Remove all non-numeric digits."""
-    return re.sub('[^\d]', '', phone)
+    """Remove all non-numeric digits in phone string."""
+    if phone:
+        return re.sub('[^\d]', '', phone)
+
+def trunc(phone):
+    """Strip phone, then truncate it.  Return last 10 digits"""
+    if phone:
+        ph = strip(phone)
+        return ph[-10:]
 
 def format_phone(phone):
     """
@@ -141,27 +154,47 @@ def format_phone(phone):
         phone = "(%s) %s-%s" % (ph[-10:-7], ph[-7:-4], ph[-4:])
     return phone.decode('utf-8')
 
+def format_address(address):
+    """If address is email, leave alone.  Otherwise, call format_phone()."""
+    m = re.search('@', address)     # No @ sign?  Must be phone number!
+    if not m:
+        address = format_phone(address)
+    return address
+
 def valid_phone(phone):
     """
-    Simple validation of phone. It is considered a valid phone number if 
-    it has at least 5 digits, after stripping all non-numeric digits.
+    Simple validation of phone number. 
+    
+    It is considered a valid phone number if: 
+        * It does not contain any letters
+        * It does not contain the '@' sign
+        * It has at least 3 digits, after stripping all non-numeric digits.
     
     Returns True if valid, False if not.
     """
-    stripped = strip(phone)
-    return True if len(stripped) >= 5 else False
+    ret_val = False
+    phone_match = re.search('^[^a-zA-Z@]+$', phone)
+    if phone_match:
+        stripped = strip(phone)
+        if len(stripped) >= 3:
+            ret_val = True
+    return ret_val
 
 def validate_aliases(aliases):
-    """Raise exception if any alias is not in 'valid_number = name' format."""
+    """Raise exception if any alias is not in 'address = name' format."""
     if aliases:
         for a in aliases:
             # Only one equal sign allowed!
             m = re.search('^([^=]+)=[^=]+$', a)
             if not m:
                 raise ValueError("OPTION ERROR: Invalid --alias format. "
-                                 "Should be 'number = name'.")
-            elif not valid_phone(m.group(1)):
-                raise ValueError("OPTION ERROR: Invalid number in --alias.")
+                                 "Should be 'address = name'.")
+            key = m.group(1)
+            phone_match = re.search('^[^@]+$', key)     # No @ sign = phone!
+            if phone_match:
+                if not valid_phone(key):
+                    raise ValueError("OPTION ERROR: Invalid phone number "
+                                     "in --alias.")
 
 def validate_numbers(numbers):
     """Raise exception if invalid phone number found."""
@@ -228,102 +261,102 @@ def copy_sms_db(db):
         copy.close()
     return copy.name
 
-def query_group_ids(phone):
-    """
-    Find group_ids that match phone in group_member table.
-    
-    The 'address' field in group_member is inconsistently formatted.
-    The same number could be represented as '(555) 555-1212', or
-    '+15555551212', or '5555551212'.
-    
-    To query for matches, we'll perform a LIKE query between the last 
-    10 digits of the stripped phone and the stripped address field.
-    
-    Return list of group_ids.
-    """
-    ph = strip(phone)
-    conn = sqlite3.connect(COPY_DB)
-    conn.create_function("STRIP", 1, strip)
-    cur = conn.cursor()
-    
-    query = "select group_id from group_member where STRIP(address) like ?"
-    params = ('%'+ph[-10:],)
-    cur.execute(query, params)
-    result = cur.fetchall()
-    conn.close()
-    if result:
-        group_ids = [r[0] for r in result]
-    else:
-        group_ids = None
-        logging.warning("Phone number not found: %s" % phone)
-    return group_ids
-
 def alias_map(aliases):
     """
-    Map aliases to group_ids.
+    Convert .ini-style aliases to dict.
     
-    For each alias ("number=name"), use number to look up group_ids
-    in group_member table.
-    
-    Return dictionary, where key = group_id, value = alias.
+    Key: phone number or email address.  (We truncate phone numbers for 
+         consistent formatting.)
+    Value: Alias
     """
-    result = {}
+    amap = {}
     if aliases:
         for a in aliases:
             m = re.search('^([^=]+)=([^=]+)$', a)
-            number = m.group(1)
-            name = m.group(2)
-            group_ids = query_group_ids(number)
-            if group_ids:
-                for gid in group_ids:
-                    result[gid] = name.decode('utf-8')
-    return result
+            key = m.group(1)
+            alias = m.group(2)
+            # Is key an email address?
+            m2 = re.search('@', key)
+            if not m2:
+                key = trunc(key) 
+            amap[key] = alias.decode('utf-8')
+    return amap
 
-def question_marks_placeholder(num):
+def build_msg_query(numbers, emails):
     """
-    Return comma-separated string of question marks, to 
-    be used as a placeholder in the `WHERE IN` clause of query.
-    """
-    qmarks = []
-    for n in range(num):
-        qmarks.append("?")
-    return ', '.join(qmarks)
-
-def build_msg_query(numbers):
-    """
-    Build the query for SMS messages.
+    Build the query for SMS and iMessage messages.
     
-    If `numbers` is not None, that means we're querying for a subset 
-    of messages. First, we need to find the group_id associated with 
-    each phone number. Then, we select from the message table using a 
-    `WHERE IN (list of group_ids)` clause.
+    If `numbers` or `emails` is not None, that means we're querying for a
+    subset of messages. Phone number is in `address` field for SMS messages,
+    and in `madrid_handle` for iMessage. Email is only in `madrid_handle`.
     
-    If `numbers` is None (or we don't find any group_ids), then we 
-    select all messages.
+    Because of inconsistently formatted phone numbers, we run both passed-in
+    numbers and numbers in DB through trunc() before comparing them.
+    
+    If `numbers` is None, then we select all messages.
     
     Returns: query (string), params (tuple)
     """
-    # Match numbers to group_ids
-    group_ids = []
+    query = """
+SELECT 
+    rowid, 
+    date, 
+    address, 
+    text, 
+    flags, 
+    group_id, 
+    madrid_handle, 
+    madrid_flags,
+    madrid_error,
+    is_madrid, 
+    madrid_date_read,
+    madrid_date_delivered
+FROM message """
+    # Build up the where clause, if limiting query by phone.
+    params = []
+    or_clauses = []
     if numbers:
         for n in numbers:
-            gids = query_group_ids(n)
-            if gids: 
-                group_ids.extend(gids)
-            
-    if group_ids:
-        qmarks = question_marks_placeholder(len(group_ids))
-        query = ("select rowid, date, address, text, flags, group_id "
-                 "from message "
-                 "where group_id in (%s) "
-                 "order by rowid" % (qmarks))
-        params = tuple(group_ids)
+            or_clauses.append("TRUNC(address) = ?")
+            or_clauses.append("TRUNC(madrid_handle) = ?")
+            params.extend([trunc(n), trunc(n)])
+    if emails:
+        for e in emails:
+            or_clauses.append("madrid_handle = ?")
+            params.append(e)
+    if or_clauses:
+        where = "\nWHERE " + "\nOR ".join(or_clauses)
+        query = query + where
+    query = query + "\nORDER by rowid"
+    return query, tuple(params)
+
+def fix_imessage_date(seconds):
+    """
+    Convert seconds to unix epoch time.
+    
+    iMessage dates are not standard unix time.  They begin at midnight on 
+    2001-01-01, instead of the usual 1970-01-01.
+    
+    To convert to unix time, add 978,307,200 seconds!
+    
+    Source: http://d.hatena.ne.jp/sak_65536/20111017/1318829688
+    (Thanks, Google Translate!)
+    """
+    return seconds + 978307200
+
+def imessage_date(row):
+    """
+    Return date for iMessage.
+    
+    iMessage messages have 2 dates: madrid_date_read and
+    madrid_date_delivered. Only one is set for each message, so find the
+    non-zero one, fix it so it is standard unix time, and return it.
+    """
+    if row['madrid_date_read'] == 0:
+        im_date = row['madrid_date_delivered']
     else:
-        query = ("select rowid, date, address, text, flags, group_id "
-                 "from message "
-                 "order by rowid")
-        params = ()
-    return query, params
+        im_date = row['madrid_date_read']
+    return fix_imessage_date(im_date)
 
 def convert_date(unix_date, format):
     """Convert unix epoch time string to formatted date string."""
@@ -331,29 +364,66 @@ def convert_date(unix_date, format):
     ds = dt.strftime(format)
     return ds.decode('utf-8')
 
-def convert_address(row, me, alias_map):
+def convert_address_imessage(row, me, alias_map):
     """
-    Take the address from row (a sqlite3.Row) and return 
-    a tuple of address strings: (from_addr, to_addr).
+    Find the iMessage address in row (a sqlite3.Row) and return a tuple of
+    address strings: (from_addr, to_addr).
     
-    Row only has one address field, but I want address strings for two 
-    identities: 'me' and 'other' person I'm texting.
+    In an iMessage message, the address could be an email or a phone number,
+    and is found in the `madrid_handle` field.
     
-    'me' is passed in value.
+    Next, look for alias in alias_map.  Otherwise, use formatted address.
     
-    'other' is either a name from alias_map (if address has alias), 
-        OR 'address' as a formatted phone number (default).
+    Use `madrid_flags` to determine direction of the message:
+        36869 = 'incoming'
+        12289 = 'outgoing'
+    """
+    if isinstance(me, str): 
+        me = me.decode('utf-8')
         
-    'flags' tells us direction of message:
+    # If madrid_handle is phone number, have to truncate it.
+    email_match = re.search('@', row['madrid_handle'])
+    if email_match:
+        handle = row['madrid_handle']
+    else:
+        handle = trunc(row['madrid_handle'])
+    
+    if handle in alias_map:
+        other = alias_map[handle]
+    else:
+        other = format_address(row['madrid_handle'])
+        
+    if row['madrid_flags'] == 36869:
+        from_addr = other
+        to_addr = me
+    elif row['madrid_flags'] == 12289:
+        from_addr = me
+        to_addr = other
+        
+    return (from_addr, to_addr)
+
+def convert_address_sms(row, me, alias_map):
+    """
+    Find the sms address in row (a sqlite3.Row) and return a tuple of address
+    strings: (from_addr, to_addr). 
+    
+    In an SMS message, the address is always a phone number and is found in
+    the `address` field.
+    
+    Next, look for alias in alias_map.  Otherwise, use formatted address.
+    
+    Use `flags` to determine direction of the message:
         2 = 'incoming'
         3 = 'outgoing'
     """
-    if isinstance(me, str): me = me.decode('utf-8')
-    address = format_phone(row['address'])
-    if alias_map and row['group_id'] in alias_map:
-        other = alias_map[row['group_id']]
+    if isinstance(me, str): 
+        me = me.decode('utf-8')
+    
+    tr_address = trunc(row['address'])
+    if tr_address in alias_map:
+        other = alias_map[tr_address]
     else:
-        other = address
+        other = format_phone(row['address'])
         
     if row['flags'] == 2:
         from_addr = other
@@ -364,8 +434,8 @@ def convert_address(row, me, alias_map):
         
     return (from_addr, to_addr)
 
-def skip_row(row):
-    """Return True, if row should be skipped."""
+def skip_sms(row):
+    """Return True, if sms row should be skipped."""
     retval = False
     if row['flags'] not in (2, 3):
         logging.info("Skipping msg (%s) not sent. Address: %s. Text: %s." % \
@@ -375,6 +445,25 @@ def skip_row(row):
         logging.info("Skipping msg (%s) without address. "
                         "Text: %s" % (row['rowid'], row['text']))
         retval = True
+    elif not row['text']:
+        logging.info("Skipping msg (%s) without text. Address: %s" % \
+                        (row['rowid'], row['address']))
+        retval = True
+    return retval
+
+def skip_imessage(row):
+    """Return True, if iMessage row should be skipped."""
+    retval = False
+    if row['madrid_error'] != 0:
+        logging.info("Skipping msg (%s) with error code %s. Address: %s. "
+                        "Text: %s." % (row['rowid'], row['madrid_error'], 
+                        row['address'], row['text']))
+        retval = True
+    # Is this ever true with iMessage message?
+    # elif not row['madrid_handle']:
+    #     logging.info("Skipping msg (%s) without address. "
+    #                     "Text: %s" % (row['rowid'], row['text']))
+    #     retval = True
     elif not row['text']:
         logging.info("Skipping msg (%s) without text. Address: %s" % \
                         (row['rowid'], row['address']))
@@ -392,29 +481,31 @@ def msgs_human(messages, header):
     Width of 'from' and 'to' columns is determined by widest column value
     in messages, so columns align.
     """
-    # Figure out column widths 
-    max_from = max([len(x['from']) for x in messages])
-    max_to = max([len(x['to']) for x in messages])
-    max_date = max([len(x['date']) for x in messages])
+    output = ""
+    if messages:
+        # Figure out column widths 
+        max_from = max([len(x['from']) for x in messages])
+        max_to = max([len(x['to']) for x in messages])
+        max_date = max([len(x['date']) for x in messages])
     
-    from_width = max(max_from, len('From'))
-    to_width = max(max_to, len('To'))
-    date_width = max(max_date, len('Date'))
+        from_width = max(max_from, len('From'))
+        to_width = max(max_to, len('To'))
+        date_width = max(max_date, len('Date'))
     
-    msgs = []
-    if header:
-        htemplate = u"{0:{1}} | {2:{3}} | {4:{5}} | {6}"
-        hrow = htemplate.format('Date', date_width, 'From', from_width, 
-                               'To', to_width, 'Text')
-        msgs.append(hrow)
-    for m in messages:
-        template = u"{0:{1}} | {2:>{3}} | {4:>{5}} | {6}"
-        msg = template.format(m['date'], date_width, m['from'], from_width, 
-                              m['to'], to_width, m['text'])
-        msgs.append(msg)
-    msgs.append('')
-    result = '\n'.join(msgs).encode('utf-8')
-    return result
+        msgs = []
+        if header:
+            htemplate = u"{0:{1}} | {2:{3}} | {4:{5}} | {6}"
+            hrow = htemplate.format('Date', date_width, 'From', from_width, 
+                                   'To', to_width, 'Text')
+            msgs.append(hrow)
+        for m in messages:
+            template = u"{0:{1}} | {2:>{3}} | {4:>{5}} | {6}"
+            msg = template.format(m['date'], date_width, m['from'], from_width, 
+                                  m['to'], to_width, m['text'])
+            msgs.append(msg)
+        msgs.append('')
+        output = '\n'.join(msgs).encode('utf-8')
+    return output
 
 def msgs_csv(messages, header):
     """Return messages in .csv format."""
@@ -474,21 +565,29 @@ def main():
         COPY_DB = copy_sms_db(ORIG_DB)
         
         aliases = alias_map(args.aliases)
-        query, params = build_msg_query(args.numbers)
+        query, params = build_msg_query(args.numbers, args.emails)
     
         conn = sqlite3.connect(COPY_DB)
         conn.row_factory = sqlite3.Row
+        conn.create_function("TRUNC", 1, trunc)
         cur = conn.cursor()
         cur.execute(query, params)
         logging.info("Run query: %s" % (query))
-        logging.info("With query params: (%s)" % (params if params else ''))
+        logging.info("With query params: %s" % (params,))
     
         messages = []
         for row in cur:
-            if skip_row(row): continue
-            fmt_date = convert_date(row['date'], args.date_format)
-            fmt_from, fmt_to = convert_address(row, args.identity, aliases)
-            fmt_text = row['text']
+            if row['is_madrid'] == 1:
+                if skip_imessage(row): continue
+                im_date = imessage_date(row)
+                fmt_date = convert_date(im_date, args.date_format)
+                fmt_from, fmt_to = convert_address_imessage(row, args.identity, aliases)
+                fmt_text = row['text']
+            else:
+                if skip_sms(row): continue
+                fmt_date = convert_date(row['date'], args.date_format)
+                fmt_from, fmt_to = convert_address_sms(row, args.identity, aliases)
+                fmt_text = row['text']
             msg = {'date': fmt_date,
                    'from': fmt_from, 
                    'to': fmt_to,
