@@ -64,8 +64,11 @@ def setup_and_parse(parser):
     
     Return args.
     """
-    parser.add_argument("-q", "--quiet", action='store_true', 
-            help="Reduce running commentary.")
+    log_group = parser.add_mutually_exclusive_group()
+    log_group.add_argument("-q", "--quiet", action='store_true', 
+            help="Decrease running commentary.")
+    log_group.add_argument("-v", "--verbose", action='store_true', 
+            help="Increase running commentary.")
     
     # Format Options Group
     format_group = parser.add_argument_group('Format Options')
@@ -557,6 +560,8 @@ def main():
     
         if args.quiet:
             logging.basicConfig(level=logging.WARNING)
+        elif args.verbose:
+            logging.basicConfig(level=logging.DEBUG)
         else:
             logging.basicConfig(level=logging.INFO)
         
@@ -572,8 +577,8 @@ def main():
         conn.create_function("TRUNC", 1, trunc)
         cur = conn.cursor()
         cur.execute(query, params)
-        logging.info("Run query: %s" % (query))
-        logging.info("With query params: %s" % (params,))
+        logging.debug("Run query: %s" % (query))
+        logging.debug("With query params: %s" % (params,))
     
         messages = []
         for row in cur:
@@ -599,7 +604,7 @@ def main():
     finally:
         if COPY_DB: 
             os.remove(COPY_DB)
-            logging.info("Deleted COPY_DB: %s" % COPY_DB)
+            logging.debug("Deleted COPY_DB: %s" % COPY_DB)
 
     
 if __name__ == '__main__':

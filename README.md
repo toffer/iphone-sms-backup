@@ -71,13 +71,14 @@ Examples
 
 Usage
 =====
-    usage: sms-backup.py [-h] [-q] [-a PHONE=NAME] [-d FORMAT]
+    usage: sms-backup.py [-h] [-q | -v] [-a ADDRESS=NAME] [-d FORMAT]
                          [-f {human,csv,json}] [-m NAME] [-o FILE] [-e EMAIL]
                          [-p PHONE] [--no-header] [-i FILE]
 
     optional arguments:
       -h, --help            show this help message and exit
-      -q, --quiet           Reduce running commentary.
+      -q, --quiet           Decrease running commentary.
+      -v, --verbose         Increase running commentary.
 
     Format Options:
       -a PHONE=NAME, --alias PHONE=NAME
@@ -116,7 +117,6 @@ Usage
       -i FILE, --input FILE
                             Name of SMS db file. Optional. Default: Script will
                             find and use db in standard backup location.
-
 
 Notes on the SMS Database
 =========================
