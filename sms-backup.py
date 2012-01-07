@@ -70,11 +70,11 @@ def setup_and_parse(parser):
     # Format Options Group
     format_group = parser.add_argument_group('Format Options')
     format_group.add_argument("-a", "--alias", action="append", 
-            dest="aliases", metavar="PHONE=NAME",
-            help="Key-value pair (.ini style) that maps a phone "
-                 "number to a name. Name replaces phone number in output. Can "
-                 "be used multiple times. Optional. If not present, phone "
-                 "number is used in output.")
+            dest="aliases", metavar="ADDRESS=NAME",
+            help="Key-value pair (.ini style) that maps an address "
+                 "(phone number or email) to a name. Name replaces "
+                 "address in output. Can be used multiple times. Optional. "
+                 "If not present, address is used in output.")
                  
     format_group.add_argument("-d", "--date-format", dest="date_format",
             metavar="FORMAT", default="%Y-%m-%d %H:%M:%S",
