@@ -462,11 +462,11 @@ def skip_imessage(row):
                         "Text: %s." % (row['rowid'], row['madrid_error'], 
                         row['address'], row['text']))
         retval = True
-    # Is this ever true with iMessage message?
-    # elif not row['madrid_handle']:
-    #     logging.info("Skipping msg (%s) without address. "
-    #                     "Text: %s" % (row['rowid'], row['text']))
-    #     retval = True
+    elif not row['madrid_handle']:
+        logging.info("Skipping msg (%s) without address. "
+                        "(Probably iMessage group chat.) "
+                        "Text: %s" % (row['rowid'], row['text']))
+        retval = True
     elif not row['text']:
         logging.info("Skipping msg (%s) without text. Address: %s" % \
                         (row['rowid'], row['address']))
