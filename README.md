@@ -194,8 +194,8 @@ which you are sending an iMessage message.
 The `madrid_flags` field shows whether iMessage message was sent or received
 by the iPhone:
 
-    36869 - Message received by iPhone from address
-    12289 - Message sent from iPhone to address
+    12289 - Message received by iPhone from address
+    36869 - Message sent from iPhone to address
 
 More Reading
 ------------

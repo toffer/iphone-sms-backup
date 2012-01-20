@@ -378,8 +378,8 @@ def convert_address_imessage(row, me, alias_map):
     Next, look for alias in alias_map.  Otherwise, use formatted address.
     
     Use `madrid_flags` to determine direction of the message:
-        36869 = 'incoming'
-        12289 = 'outgoing'
+        12289 = 'incoming'
+        36869 = 'outgoing'
     """
     if isinstance(me, str): 
         me = me.decode('utf-8')
@@ -396,10 +396,10 @@ def convert_address_imessage(row, me, alias_map):
     else:
         other = format_address(row['madrid_handle'])
         
-    if row['madrid_flags'] == 36869:
+    if row['madrid_flags'] == 12289:
         from_addr = other
         to_addr = me
-    elif row['madrid_flags'] == 12289:
+    elif row['madrid_flags'] == 36869:
         from_addr = me
         to_addr = other
         
