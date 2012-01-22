@@ -118,99 +118,14 @@ Usage
                             Name of SMS db file. Optional. Default: Script will
                             find and use db in standard backup location.
 
-Notes on the SMS Database
-=========================
-The backup sqlite db file is located
+Notes on the Database
+=====================
+The discussion about the SMS/iMessage database has been moved to the project wiki:
 
-    ~/Library/Application Support/MobileSync/Backup/<phone ID>
-    
-and is named `3d0d7e5fb2ce288813306e4d4636395e047a3d28`.
+  * https://github.com/toffer/iphone-sms-backup/wiki
 
-It's name is an SHA1 hash of the full path of the file on the phone, plus its
-Domain.
-
-    $ printf 'HomeDomain-Library/SMS/sms.db' | openssl sha1
-    3d0d7e5fb2ce288813306e4d4636395e047a3d28
-
-The schema of the key table: `message`:
-
-    CREATE TABLE message 
-        (ROWID INTEGER PRIMARY KEY AUTOINCREMENT, 
-         address TEXT, 
-         date INTEGER, 
-         text TEXT, 
-         flags INTEGER, 
-         replace INTEGER, 
-         svc_center TEXT, 
-         group_id INTEGER, 
-         association_id INTEGER, 
-         height INTEGER, 
-         UIFlags INTEGER, 
-         version INTEGER, 
-         subject TEXT, 
-         country TEXT, 
-         headers BLOB, 
-         recipients BLOB, 
-         read INTEGER,
-         madrid_attributedBody BLOB, 
-         madrid_handle TEXT, 
-         madrid_version INTEGER, 
-         madrid_guid TEXT, 
-         madrid_type INTEGER, 
-         madrid_roomname TEXT, 
-         madrid_service TEXT, 
-         madrid_account TEXT, 
-         madrid_flags INTEGER, 
-         madrid_attachmentInfo BLOB, 
-         madrid_url TEXT, 
-         madrid_error INTEGER, 
-         is_madrid INTEGER, 
-         madrid_date_read INTEGER, 
-         madrid_date_delivered INTEGER, 
-         madrid_account_guid TEXT);
-
-The schema has changed dramatically with the introduction of iMessage in iOS5.
-All of the `*madrid*` fields are new, and these are used for storing iMessage
-messages.
-
-SMS Messages
-------------
-The `address` field contains the phone number to which you are sending a SMS
-message, but it is inconsistently formatted. Numbers can appear as (555)
-555-1212, or 15555551212, or +15555551212. (For this reason, I normalize phone
-numbers before attempting to match them.)
-
-The `flags` field shows whether an SMS message was sent or received by the
-iPhone:
-
-    2 - Message received by iPhone from address
-    3 - Message sent from iPhone to address
-    
-iMessage Messages
------------------
-The `madrid_handle` field contains either a phone number or email address to
-which you are sending an iMessage message.
-
-The `madrid_flags` field shows whether iMessage message was sent or received
-by the iPhone:
-
-    12289 - Message received by iPhone from address
-    36869 - Message sent from iPhone to address
-
-More Reading
-------------
-  * http://www.slideshare.net/hrgeeks/iphone-forensics-without-the-iphone
-  * http://damon.durandfamily.org/archives/000487.html
-  * http://linuxsleuthing.blogspot.com/2011/02/parsing-iphone-sms-database.html
-  * http://www.scip.ch/?labs.20111103
-  * http://d.hatena.ne.jp/sak_65536/20111017/1318829688
-  
-(The last two links are good for iOS5 schema discussions.  Google Translate
-was a big help here!)
- 
 Known Limitations
 =================
-
   * Won't find the backup sqlite db on Windows, but it *should* run if you pass
     in the db name with --input.  (I haven't tested it, though...)
 
