@@ -377,10 +377,13 @@ def convert_address_imessage(row, me, alias_map):
     
     Next, look for alias in alias_map.  Otherwise, use formatted address.
     
-    Use `madrid_flags` to determine direction of the message:
-        12289 = 'incoming'
-        36869 = 'outgoing'
+    Use `madrid_flags` to determine direction of the message.  (See wiki
+    page for Meaning of FLAGS fields discussion.)
+        
     """
+    incoming_flags = (12289, 77825)
+    outgoing_flags = (36869, 102405)
+    
     if isinstance(me, str): 
         me = me.decode('utf-8')
         
@@ -396,10 +399,10 @@ def convert_address_imessage(row, me, alias_map):
     else:
         other = format_address(row['madrid_handle'])
         
-    if row['madrid_flags'] == 12289:
+    if row['madrid_flags'] in incoming_flags:
         from_addr = other
         to_addr = me
-    elif row['madrid_flags'] == 36869:
+    elif row['madrid_flags'] in outgoing_flags:
         from_addr = me
         to_addr = other
         
@@ -455,12 +458,40 @@ def skip_sms(row):
     return retval
 
 def skip_imessage(row):
-    """Return True, if iMessage row should be skipped."""
+    """
+    Return True, if iMessage row should be skipped.
+    
+    I whitelist madrid_flags values that I understand:
+    
+         36869   Sent from iPhone to SINGLE PERSON (address)
+        102405   Sent to SINGLE PERSON (text contains email, phone, or url)
+         12289   Received by iPhone
+         77825   Received (text contains email, phone, or url)
+    
+    Don't handle iMessage Group chats:
+        
+         32773   Sent from iPhone to GROUP
+         98309   Sent to GROUP (text contains email, phone or url)
+     
+    See wiki page on FLAGS fields for more details:
+        
+    """
+    flags_group_msgs = (32773, 98309)
+    flags_whitelist = (36869, 102405, 12289, 77825)
     retval = False
     if row['madrid_error'] != 0:
         logging.info("Skipping msg (%s) with error code %s. Address: %s. "
-                        "Text: %s." % (row['rowid'], row['madrid_error'], 
+                        "Text: %s" % (row['rowid'], row['madrid_error'], 
                         row['address'], row['text']))
+        retval = True
+    elif row['madrid_flags'] in flags_group_msgs:
+        logging.info("Skipping msg (%s). Don't handle iMessage group chat. " 
+                     "Text: %s" % (row['rowid'], row['text']))
+        retval = True
+    elif row['madrid_flags'] not in flags_whitelist:
+        logging.info("Skipping msg (%s). Don't understand madrid_flags: %s. " 
+                        "Text: %s" % (row['rowid'], row['madrid_flags'], 
+                        row['text']))
         retval = True
     elif not row['madrid_handle']:
         logging.info("Skipping msg (%s) without address. "
