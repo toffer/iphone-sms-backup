@@ -14,7 +14,7 @@
     }
     #container {
       margin: 0 auto;
-      width: 700px;
+      width: 760px;
     }
     h1 { font-size: 3.8em; color: #3a3a3a; margin-bottom: 3px; }
     h1 .small { font-size: 0.4em; }
@@ -35,154 +35,137 @@
 
   <div id="container">
 
-    <div class="download">
-      <a href="https://github.com/toffer/iphone-sms-backup/zipball/master">
-        <img border="0" width="90" src="https://github.com/images/modules/download/zip.png"></a>
-      <a href="https://github.com/toffer/iphone-sms-backup/tarball/master">
-        <img border="0" width="90" src="https://github.com/images/modules/download/tar.png"></a>
-    </div>
-
     <h1><a href="https://github.com/toffer/iphone-sms-backup">iphone-sms-backup</a>
-      <span class="small">by <a href="https://github.com/toffer">toffer</a></span></h1>
+    <span class="small">by <a href="https://github.com/toffer">toffer</a></span></h1>
 
     <div class="description">
       Backup your iPhone SMS and iMessage text messages.
     </div>
-
     
+    <h2>Why?</h2>
       <p>Your iPhone stores a copy of all your SMS and iMessage text messages in a
 sqlite database. But, if you want to view them all on your iPhone, it's not so
-easy. Be prepared to do a lot of scrolling.
+easy. Be prepared to do a lot of scrolling.</p>
 
-Or, you can you use `sms-backup.py` to backup all your messages in text
+      <p>Or, you can you use "sms-backup.py" to backup all your messages in text
 format, CSV format, or JSON, and then view them in the data viewer of your
-choice.
+choice.</p>
 
-Plus, `sms-backup.py` cleans up and allows you to transform your data, in
-order to make your text messages easier to read.
+      <p>Plus, "sms-backup.py" cleans up and allows you to transform your data, in
+order to make your text messages easier to read.</p>
 
-Transformations possible with `sms-backup.py`:
+      <p>Transformations possible with "sms-backup.py":
+        <ul>
+          <li>Better date formatting.</li>
+          <li>Consistent formatting of phone numbers.</li>
+          <li>Replacement of phone numbers with names.</li>
+        </ul>
+      </p>
 
-  * Better date formatting.
-  
-  * Consistent formatting of phone numbers.
-  
-  * Replacement of phone numbers with names.
+      <h2>How?</h2>
+      
+      <p>Each time you sync/backup your iPhone, the SMS sqlite db file is copied to
+your computer.</p>
 
-How?
-----
-Each time you sync/backup your iPhone, the SMS sqlite db file is copied to
-your computer. 
-
-When you run `sms-backup.py`, it finds the backup db file, makes a temporary
+      <p>When you run "sms-backup.py", it finds the backup db file, makes a temporary
 copy of it, selects the text messages you want from the temporary copy, and
-then exports them.
+then exports them.</p>
 
-Examples
-========
-    $ sms-backup.py
-    
-    2010-01-01 15:31:44 |             Me | (555) 555-1212 | I love donuts!!
-    2010-01-02 16:17:58 | (555) 555-1212 |             Me | I love a man who loves donuts!!!
-    2010-01-02 17:01:19 |             Me | (999) 999-1212 | I don't feel so good...
-    ...
-    
-    $ sms-backup.py --myname Tom \
-                    --alias "555-555-1212=Michele" \
-                    --phone "5555551212" \
-                    --phone "1112223333" \
-                    --date-format "%b %d, %Y at %I:%M %p" \
-                    --format json
-    
-    [
-      {
-        "date": "Jan 01, 2010 at 03:31 PM",
-        "from": "Tom", 
-        "text": "I love donuts!!", 
-        "to": "Michele"
-      }, 
-      {
-        "date": "Jan 02, 2010 at 04:17 PM",
-        "from": "Michele", 
-        "text": "I love a man who loves donuts!!!", 
-        "to": "Tom"
-      }, 
-      {
-        "date": "Jan 02, 2010 at 06:00 PM",
-        "from": "Tom", 
-        "text": "Just checking in...where are you?", 
-        "to": "(111) 222-3333"
-      }, 
-      ...
+      <h2>Examples</h2>
+        <pre><code>
+$ sms-backup.py
 
-Usage
-=====
-    usage: sms-backup.py [-h] [-q | -v] [-a ADDRESS=NAME] [-d FORMAT]
-                         [-f {human,csv,json}] [-m NAME] [-o FILE] [-e EMAIL]
-                         [-p PHONE] [--no-header] [-i FILE]
+2010-01-01 15:31:44 |             Me | (555) 555-1212 | I love donuts!!
+2010-01-02 16:17:58 | (555) 555-1212 |             Me | I love a man who loves donuts!!!
+2010-01-02 17:01:19 |             Me | (999) 999-1212 | I don't feel so good...
+...
 
-    optional arguments:
-      -h, --help            show this help message and exit
-      -q, --quiet           Decrease running commentary.
-      -v, --verbose         Increase running commentary.
+$ sms-backup.py --myname Tom \
+                --alias "555-555-1212=Michele" \
+                --phone "5555551212" \
+                --phone "1112223333" \
+                --date-format "%b %d, %Y at %I:%M %p" \
+                --format json
 
-    Format Options:
-      -a PHONE=NAME, --alias PHONE=NAME
-                            Key-value pair (.ini style) that maps a phone number
-                            to a name. Name replaces phone number in output. Can
-                            be used multiple times. Optional. If not present,
-                            phone number is used in output.
-      -d FORMAT, --date-format FORMAT
-                            Date format string. Optional. Default: '%Y-%m-%d
-                            %H:%M:%S'.
-      -f {human,csv,json}, --format {human,csv,json}
-                            How output is formatted. Valid options: 'human'
-                            (fields separated by pipe), 'csv', or 'json'.
-                            Optional. Default: 'human'.
-      -m NAME, --myname NAME
-                            Name of iPhone owner in output. Optional. Default
-                            name: 'Me'.
+[
+  {
+    "date": "Jan 01, 2010 at 03:31 PM",
+    "from": "Tom", 
+    "text": "I love donuts!!", 
+    "to": "Michele"
+  }, 
+  {
+    "date": "Jan 02, 2010 at 04:17 PM",
+    "from": "Michele", 
+    "text": "I love a man who loves donuts!!!", 
+    "to": "Tom"
+  }, 
+  {
+    "date": "Jan 02, 2010 at 06:00 PM",
+    "from": "Tom", 
+    "text": "Just checking in...where are you?", 
+    "to": "(111) 222-3333"
+  }, 
+  ...
+    </code></pre>
 
-    Output Options:
-      -o FILE, --output FILE
-                            Name of output file. Optional. Default (if not
-                            present): Output to STDOUT.
-      -e EMAIL, --email EMAIL
-                            Limit output to iMessage messages to/from this email
-                            address. Can be used multiple times. Optional. Default
-                            (if not present): All iMessages included.
-      -p PHONE, --phone PHONE
-                            Limit output to sms messages to/from this phone
-                            number. Can be used multiple times. Optional. Default
-                            (if not present): All messages from all numbers
-                            included.
-      --no-header           Don't print header row for 'human' or 'csv' formats.
-                            Optional. Default (if not present): Print header row.
+    <h2>Usage</h2>
+      <pre><code>
+$ sms-backup.py --help
 
-    Input Options:
-      -i FILE, --input FILE
-                            Name of SMS db file. Optional. Default: Script will
-                            find and use db in standard backup location.
-</p>
+usage: sms-backup.py [-h] [-q | -v] [-a ADDRESS=NAME] [-d FORMAT]
+                     [-f {human,csv,json}] [-m NAME] [-o FILE] [-e EMAIL]
+                     [-p PHONE] [--no-header] [-i FILE]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -q, --quiet           Decrease running commentary.
+  -v, --verbose         Increase running commentary.
+
+Format Options:
+  -a PHONE=NAME, --alias PHONE=NAME
+                        Key-value pair (.ini style) that maps a phone number
+                        to a name. Name replaces phone number in output. Can
+                        be used multiple times. Optional. If not present,
+                        phone number is used in output.
+  -d FORMAT, --date-format FORMAT
+                        Date format string. Optional. Default: '%Y-%m-%d
+                        %H:%M:%S'.
+  -f {human,csv,json}, --format {human,csv,json}
+                        How output is formatted. Valid options: 'human'
+                        (fields separated by pipe), 'csv', or 'json'.
+                        Optional. Default: 'human'.
+  -m NAME, --myname NAME
+                        Name of iPhone owner in output. Optional. Default
+                        name: 'Me'.
+
+Output Options:
+  -o FILE, --output FILE
+                        Name of output file. Optional. Default (if not
+                        present): Output to STDOUT.
+  -e EMAIL, --email EMAIL
+                        Limit output to iMessage messages to/from this email
+                        address. Can be used multiple times. Optional. Default
+                        (if not present): All iMessages included.
+  -p PHONE, --phone PHONE
+                        Limit output to sms messages to/from this phone
+                        number. Can be used multiple times. Optional. Default
+                        (if not present): All messages from all numbers
+                        included.
+  --no-header           Don't print header row for 'human' or 'csv' formats.
+                        Optional. Default (if not present): Print header row.
+
+Input Options:
+  -i FILE, --input FILE
+                        Name of SMS db file. Optional. Default: Script will
+                        find and use db in standard backup location.
+      </code></pre>                
     
-
+    <h2>License</h2>
+    <p>MIT License.</p>
     
-
-    
-
-    
-      <h2>License</h2>
-      <p>MIT License.</p>
-    
-
-    
-      <h2>Authors</h2>
-      <p>Tom Offermann (tom@offermann.us)<br/>      </p>
-    
-
-    
-      <h2>Contact</h2>
-      <p>Tom Offermann (tom@micheleandtom.com)<br/>      </p>
+    <h2>Author</h2>
+    <p><a href="https://github.com/toffer">Tom Offermann</a> (tom@offermann.us)</p>
     
 
     <h2>Download</h2>
