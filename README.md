@@ -126,7 +126,7 @@ Notes on the Database
 =====================
 The discussion about the SMS/iMessage database has been moved to the project wiki:
 
-  * https://github.com/toffer/iphone-sms-backup/wiki
+  * [https://github.com/toffer/iphone-sms-backup/wiki]
 
 Known Limitations
 =================
