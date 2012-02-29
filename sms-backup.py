@@ -580,7 +580,6 @@ def output(messages, out_file, format, header):
     fh.close()
 
 def main():
-    try:
         parser = argparse.ArgumentParser()
         args = setup_and_parse(parser)
         try:
@@ -599,43 +598,49 @@ def main():
         global ORIG_DB, COPY_DB 
         ORIG_DB = args.db_file or find_sms_db()
         COPY_DB = copy_sms_db(ORIG_DB)
-        
         aliases = alias_map(args.aliases)
         query, params = build_msg_query(args.numbers, args.emails)
-    
-        conn = sqlite3.connect(COPY_DB)
-        conn.row_factory = sqlite3.Row
-        conn.create_function("TRUNC", 1, trunc)
-        cur = conn.cursor()
-        cur.execute(query, params)
-        logging.debug("Run query: %s" % (query))
-        logging.debug("With query params: %s" % (params,))
-    
-        messages = []
-        for row in cur:
-            if row['is_madrid'] == 1:
-                if skip_imessage(row): continue
-                im_date = imessage_date(row)
-                fmt_date = convert_date(im_date, args.date_format)
-                fmt_from, fmt_to = convert_address_imessage(row, args.identity, aliases)
-                fmt_text = row['text']
-            else:
-                if skip_sms(row): continue
-                fmt_date = convert_date(row['date'], args.date_format)
-                fmt_from, fmt_to = convert_address_sms(row, args.identity, aliases)
-                fmt_text = row['text']
-            msg = {'date': fmt_date,
-                   'from': fmt_from, 
-                   'to': fmt_to,
-                   'text': fmt_text}
-            messages.append(msg)
+        conn = None
+
+        try:
+            conn = sqlite3.connect(COPY_DB)
+            conn.row_factory = sqlite3.Row
+            conn.create_function("TRUNC", 1, trunc)
+            cur = conn.cursor()
+            cur.execute(query, params)
+            logging.debug("Run query: %s" % (query))
+            logging.debug("With query params: %s" % (params,))
+
+            messages = []
+            for row in cur:
+                if row['is_madrid'] == 1:
+                    if skip_imessage(row): continue
+                    im_date = imessage_date(row)
+                    fmt_date = convert_date(im_date, args.date_format)
+                    fmt_from, fmt_to = convert_address_imessage(row, args.identity, aliases)
+                    fmt_text = row['text']
+                else:
+                    if skip_sms(row): continue
+                    fmt_date = convert_date(row['date'], args.date_format)
+                    fmt_from, fmt_to = convert_address_sms(row, args.identity, aliases)
+                    fmt_text = row['text']
+                msg = {'date': fmt_date,
+                       'from': fmt_from,
+                       'to': fmt_to,
+                       'text': fmt_text}
+                messages.append(msg)
         
-        conn.close()
-        output(messages, args.output, args.format, args.header)
-    finally:
-        if COPY_DB: 
-            os.remove(COPY_DB)
-            logging.debug("Deleted COPY_DB: %s" % COPY_DB)
+            output(messages, args.output, args.format, args.header)
+
+        except sqlite3.Error as e:
+            logging.error("Unable to access %s: %s" % (COPY_DB, e))
+            sys.exit(1)
+        finally:
+            if conn:
+                conn.close()
+            if COPY_DB:
+                os.remove(COPY_DB)
+                logging.debug("Deleted COPY_DB: %s" % COPY_DB)
 
     
 if __name__ == '__main__':
