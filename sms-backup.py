@@ -242,7 +242,7 @@ def find_sms_db():
 def copy_sms_db(db):
     """Copy db to a tmp file, and return filename of copy."""
     try:
-        orig = open(db, 'r')
+        orig = open(db, 'rb')
     except:
         logging.error("Unable to open DB file: %s" % db)
         sys.exit(1)
