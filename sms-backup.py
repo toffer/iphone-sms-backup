@@ -451,10 +451,6 @@ def skip_sms(row):
         logging.info("Skipping msg (%s) without address. "
                         "Text: %s" % (row['rowid'], row['text']))
         retval = True
-    elif not row['text']:
-        logging.info("Skipping msg (%s) without text. Address: %s" % \
-                        (row['rowid'], row['address']))
-        retval = True
     return retval
 
 def skip_imessage(row):
@@ -525,6 +521,8 @@ def msgs_human(messages, header):
         from_width = max(max_from, len('From'))
         to_width = max(max_to, len('To'))
         date_width = max(max_date, len('Date'))
+
+        headers_width = from_width + to_width + date_width + 9
     
         msgs = []
         if header:
@@ -535,7 +533,7 @@ def msgs_human(messages, header):
         for m in messages:
             template = u"{0:{1}} | {2:>{3}} | {4:>{5}} | {6}"
             msg = template.format(m['date'], date_width, m['from'], from_width, 
-                                  m['to'], to_width, m['text'])
+                                  m['to'], to_width, m['text'].replace("\n","\n" + " " * headers_width))
             msgs.append(msg)
         msgs.append('')
         output = '\n'.join(msgs).encode('utf-8')
@@ -618,12 +616,18 @@ def main():
                     im_date = imessage_date(row)
                     fmt_date = convert_date(im_date, args.date_format)
                     fmt_from, fmt_to = convert_address_imessage(row, args.identity, aliases)
-                    fmt_text = row['text']
                 else:
                     if skip_sms(row): continue
                     fmt_date = convert_date(row['date'], args.date_format)
                     fmt_from, fmt_to = convert_address_sms(row, args.identity, aliases)
-                    fmt_text = row['text']
+
+                # replace carriage return symbols (sent by some phones) with newline
+                fmt_text = row['text'].replace("\015","\n")
+
+                if not row['text']:
+                    # Seems to indicate a picture was sent
+                    fmt_text = "<picture>"
+
                 msg = {'date': fmt_date,
                        'from': fmt_from,
                        'to': fmt_to,
