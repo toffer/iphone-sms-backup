@@ -621,12 +621,12 @@ def main():
                     fmt_date = convert_date(row['date'], args.date_format)
                     fmt_from, fmt_to = convert_address_sms(row, args.identity, aliases)
 
-                # replace carriage return symbols (sent by some phones) with newline
-                fmt_text = row['text'].replace("\015","\n")
-
                 if not row['text']:
                     # Seems to indicate a picture was sent
                     fmt_text = "<picture>"
+                else:
+                    # replace carriage return symbols (sent by some phones) with newline
+                    fmt_text = row['text'].replace("\015","\n")
 
                 msg = {'date': fmt_date,
                        'from': fmt_from,
