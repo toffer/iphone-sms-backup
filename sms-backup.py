@@ -440,6 +440,17 @@ def convert_address_sms(row, me, alias_map):
         
     return (from_addr, to_addr)
 
+def clean_text_msg(txt):
+    """
+    Return cleaned-up text message.
+
+        1. Replace None with ''.
+        2. Replace carriage returns (sent by some phones) with '\n'.
+
+    """
+    txt = txt or ''
+    return txt.replace("\015","\n")
+
 def skip_sms(row):
     """Return True, if sms row should be skipped."""
     retval = False
@@ -531,9 +542,10 @@ def msgs_human(messages, header):
                                    'To', to_width, 'Text')
             msgs.append(hrow)
         for m in messages:
+            text = m['text'].replace("\n","\n" + " " * headers_width)
             template = u"{0:{1}} | {2:>{3}} | {4:>{5}} | {6}"
             msg = template.format(m['date'], date_width, m['from'], from_width, 
-                                  m['to'], to_width, m['text'].replace("\n","\n" + " " * headers_width))
+                                  m['to'], to_width, text)
             msgs.append(msg)
         msgs.append('')
         output = '\n'.join(msgs).encode('utf-8')
@@ -620,18 +632,10 @@ def main():
                     if skip_sms(row): continue
                     fmt_date = convert_date(row['date'], args.date_format)
                     fmt_from, fmt_to = convert_address_sms(row, args.identity, aliases)
-
-                if not row['text']:
-                    # Seems to indicate a picture was sent
-                    fmt_text = "<picture>"
-                else:
-                    # replace carriage return symbols (sent by some phones) with newline
-                    fmt_text = row['text'].replace("\015","\n")
-
                 msg = {'date': fmt_date,
                        'from': fmt_from,
                        'to': fmt_to,
-                       'text': fmt_text}
+                       'text': clean_text_msg(row['text'])}
                 messages.append(msg)
         
             output(messages, args.output, args.format, args.header)
