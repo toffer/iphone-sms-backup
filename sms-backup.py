@@ -462,6 +462,10 @@ def skip_sms(row):
         logging.info("Skipping msg (%s) without address. "
                         "Text: %s" % (row['rowid'], row['text']))
         retval = True
+    elif not row['text']:
+        logging.info("Skipping msg (%s) without text. Address: %s" % \
+                        (row['rowid'], row['address']))
+        retval = True
     return retval
 
 def skip_imessage(row):
