@@ -219,6 +219,11 @@ def validate(args):
         print err, '\n'
         raise
 
+def most_recent(paths):
+    """Return path of most recently modified file."""
+    paths.sort(key=lambda x: os.path.getmtime(x))
+    return paths[-1]
+
 def find_sms_db():
     """Find sms db and return its filename."""
     db_name = '3d0d7e5fb2ce288813306e4d4636395e047a3d28'
@@ -235,8 +240,8 @@ def find_sms_db():
     elif len(paths) == 1:
         path = paths[0]
     else:
-        logging.warning("Multiple SMS dbs found.")
-        path = None
+        logging.warning("Multiple SMS dbs found. Using most recent db.")
+        path = most_recent(paths)
     return path
 
 def copy_sms_db(db):
