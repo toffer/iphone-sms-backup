@@ -338,6 +338,47 @@ FROM message """
     query = query + "\nORDER by rowid"
     return query, tuple(params)
 
+def build_msg_query_ios6(numbers, emails):
+    """
+    Build the query for SMS and iMessage messages for iOS6 DB.
+
+    If `numbers` or `emails` is not None, that means we're querying for a
+    subset of messages. Both phone number and email is stored in the `id`
+    field of the handle table.
+
+    If `numbers` is None, then we select all messages.
+
+    Returns: query (string), params (tuple)
+    """
+    query = """
+SELECT
+    m.rowid,
+    m.date,
+    m.is_from_me,
+    h.id,
+    m.text
+FROM
+    message m,
+    handle h
+WHERE
+    m.handle_id = h.rowid"""
+    # Build up the where clause, if limiting query by phone.
+    params = []
+    or_clauses = []
+    if numbers:
+        for n in numbers:
+            or_clauses.append("h.id = ?")
+            params.append(n)
+    if emails:
+        for e in emails:
+            or_clauses.append("h.id = ?")
+            params.append(e)
+    if or_clauses:
+        where = "\nAND\n(" + "\nOR ".join(or_clauses) + ")"
+        query = query + where
+    query = query + "\nORDER by m.rowid"
+    return query, tuple(params)
+
 def fix_imessage_date(seconds):
     """
     Convert seconds to unix epoch time.
@@ -618,7 +659,13 @@ def main():
         ORIG_DB = args.db_file or find_sms_db()
         COPY_DB = copy_sms_db(ORIG_DB)
         aliases = alias_map(args.aliases)
-        query, params = build_msg_query(args.numbers, args.emails)
+
+        ios_db_version = '6'
+        if ios_db_version == '5':
+            query, params = build_msg_query(args.numbers, args.emails)
+        elif ios_db_version == '6':
+            query, params = build_msg_query_ios6(args.numbers, args.emails)
+
         conn = None
 
         try:
