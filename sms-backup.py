@@ -290,6 +290,23 @@ def alias_map(aliases):
             amap[key] = alias.decode('utf-8')
     return amap
 
+def which_db_version(cursor):
+    """
+    Return version of DB schema as string.
+
+    Return '5', if iOS 5.
+    Return '6', if iOS 6.
+
+    """
+    query = "select count(*) from sqlite_master where name = 'handle'"
+    cursor.execute(query)
+    count = cursor.fetchone()[0]
+    if count == 1:
+        db_version = '6'
+    else:
+        db_version = '5'
+    return db_version
+
 def build_msg_query(numbers, emails):
     """
     Build the query for SMS and iMessage messages.
@@ -683,12 +700,6 @@ def main():
         COPY_DB = copy_sms_db(ORIG_DB)
         aliases = alias_map(args.aliases)
 
-        ios_db_version = '6'
-        if ios_db_version == '5':
-            query, params = build_msg_query(args.numbers, args.emails)
-        elif ios_db_version == '6':
-            query, params = build_msg_query_ios6(args.numbers, args.emails)
-
         conn = None
 
         try:
@@ -696,6 +707,13 @@ def main():
             conn.row_factory = sqlite3.Row
             conn.create_function("TRUNC", 1, trunc)
             cur = conn.cursor()
+
+            ios_db_version = which_db_version(cur)
+            if ios_db_version == '5':
+                query, params = build_msg_query(args.numbers, args.emails)
+            elif ios_db_version == '6':
+                query, params = build_msg_query_ios6(args.numbers, args.emails)
+
             cur.execute(query, params)
             logging.debug("Run query: %s" % (query))
             logging.debug("With query params: %s" % (params,))
