@@ -413,6 +413,10 @@ def convert_date(unix_date, format):
     ds = dt.strftime(format)
     return ds.decode('utf-8')
 
+def convert_date_ios6(unix_date, format):
+    date = fix_imessage_date(unix_date)
+    return convert_date(date, format)
+
 def convert_address_imessage(row, me, alias_map):
     """
     Find the iMessage address in row (a sqlite3.Row) and return a tuple of
@@ -484,6 +488,25 @@ def convert_address_sms(row, me, alias_map):
         from_addr = me
         to_addr = other
         
+    return (from_addr, to_addr)
+
+def convert_address_ios6(row, me, alias_map):
+    if isinstance(me, str):
+        me = me.decode('utf-8')
+
+    address = row['id']
+    if address in alias_map:
+        other = alias_map[address]
+    else:
+        other = address
+
+    if row['is_from_me']:
+        from_addr = me
+        to_addr = other
+    else:
+        from_addr = other
+        to_addr = me
+
     return (from_addr, to_addr)
 
 def clean_text_msg(txt):
@@ -678,21 +701,32 @@ def main():
             logging.debug("With query params: %s" % (params,))
 
             messages = []
-            for row in cur:
-                if row['is_madrid'] == 1:
-                    if skip_imessage(row): continue
-                    im_date = imessage_date(row)
-                    fmt_date = convert_date(im_date, args.date_format)
-                    fmt_from, fmt_to = convert_address_imessage(row, args.identity, aliases)
-                else:
-                    if skip_sms(row): continue
-                    fmt_date = convert_date(row['date'], args.date_format)
-                    fmt_from, fmt_to = convert_address_sms(row, args.identity, aliases)
-                msg = {'date': fmt_date,
-                       'from': fmt_from,
-                       'to': fmt_to,
-                       'text': clean_text_msg(row['text'])}
-                messages.append(msg)
+            if ios_db_version == '5':
+                for row in cur:
+                    if row['is_madrid'] == 1:
+                        if skip_imessage(row): continue
+                        im_date = imessage_date(row)
+                        fmt_date = convert_date(im_date, args.date_format)
+                        fmt_from, fmt_to = convert_address_imessage(row, args.identity, aliases)
+                    else:
+                        if skip_sms(row): continue
+                        fmt_date = convert_date(row['date'], args.date_format)
+                        fmt_from, fmt_to = convert_address_sms(row, args.identity, aliases)
+                    msg = {'date': fmt_date,
+                           'from': fmt_from,
+                           'to': fmt_to,
+                           'text': clean_text_msg(row['text'])}
+                    messages.append(msg)
+            elif ios_db_version == '6':
+                for row in cur:
+                    fmt_date = convert_date_ios6(row['date'], args.date_format)
+                    fmt_from, fmt_to = convert_address_ios6(row, args.identity, aliases)
+                    msg = {'date': fmt_date,
+                           'from': fmt_from,
+                           'to': fmt_to,
+                           'text': clean_text_msg(row['text'])}
+                    messages.append(msg)
+
         
             output(messages, args.output, args.format, args.header)
 
