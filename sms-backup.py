@@ -379,13 +379,13 @@ FROM
     handle h
 WHERE
     m.handle_id = h.rowid"""
-    # Build up the where clause, if limiting query by phone.
+    # Build up the where clause, if limiting query by phone and/or email.
     params = []
     or_clauses = []
     if numbers:
         for n in numbers:
-            or_clauses.append("h.id = ?")
-            params.append(n)
+            or_clauses.append("TRUNC(h.id) = ?")
+            params.append(trunc(n))
     if emails:
         for e in emails:
             or_clauses.append("h.id = ?")
@@ -512,6 +512,12 @@ def convert_address_ios6(row, me, alias_map):
         me = me.decode('utf-8')
 
     address = row['id']
+
+    # Truncate phone numbers, not email addresses.
+    m = re.search('@', address)
+    if not m:
+        address = trunc(address)
+
     if address in alias_map:
         other = alias_map[address]
     else:
