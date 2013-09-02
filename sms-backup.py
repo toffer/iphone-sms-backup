@@ -607,6 +607,45 @@ def skip_imessage(row):
         retval = True
     return retval
 
+def get_messages(cursor, query, params, aliases, cmd_args):
+    cursor.execute(query, params)
+    logging.debug("Run query: %s" % (query))
+    logging.debug("With query params: %s" % (params,))
+
+    messages = []
+    for row in cursor:
+        if row['is_madrid'] == 1:
+            if skip_imessage(row): continue
+            im_date = imessage_date(row)
+            fmt_date = convert_date(im_date, cmd_args.date_format)
+            fmt_from, fmt_to = convert_address_imessage(row, cmd_args.identity, aliases)
+        else:
+            if skip_sms(row): continue
+            fmt_date = convert_date(row['date'], cmd_args.date_format)
+            fmt_from, fmt_to = convert_address_sms(row, cmd_args.identity, aliases)
+        msg = {'date': fmt_date,
+               'from': fmt_from,
+               'to': fmt_to,
+               'text': clean_text_msg(row['text'])}
+        messages.append(msg)
+    return messages
+
+def get_messages_ios6(cursor, query, params, aliases, cmd_args):
+    cursor.execute(query, params)
+    logging.debug("Run query: %s" % (query))
+    logging.debug("With query params: %s" % (params,))
+
+    messages = []
+    for row in cursor:
+        fmt_date = convert_date_ios6(row['date'], cmd_args.date_format)
+        fmt_from, fmt_to = convert_address_ios6(row, cmd_args.identity, aliases)
+        msg = {'date': fmt_date,
+               'from': fmt_from,
+               'to': fmt_to,
+               'text': clean_text_msg(row['text'])}
+        messages.append(msg)
+    return messages
+
 def msgs_human(messages, header):
     """
     Return messages, with optional header row. 
@@ -717,41 +756,11 @@ def main():
             ios_db_version = which_db_version(cur)
             if ios_db_version == '5':
                 query, params = build_msg_query(args.numbers, args.emails)
+                messages = get_messages(cur, query, params, aliases, args)
             elif ios_db_version == '6':
                 query, params = build_msg_query_ios6(args.numbers, args.emails)
+                messages = get_messages_ios6(cur, query, params, aliases, args)
 
-            cur.execute(query, params)
-            logging.debug("Run query: %s" % (query))
-            logging.debug("With query params: %s" % (params,))
-
-            messages = []
-            if ios_db_version == '5':
-                for row in cur:
-                    if row['is_madrid'] == 1:
-                        if skip_imessage(row): continue
-                        im_date = imessage_date(row)
-                        fmt_date = convert_date(im_date, args.date_format)
-                        fmt_from, fmt_to = convert_address_imessage(row, args.identity, aliases)
-                    else:
-                        if skip_sms(row): continue
-                        fmt_date = convert_date(row['date'], args.date_format)
-                        fmt_from, fmt_to = convert_address_sms(row, args.identity, aliases)
-                    msg = {'date': fmt_date,
-                           'from': fmt_from,
-                           'to': fmt_to,
-                           'text': clean_text_msg(row['text'])}
-                    messages.append(msg)
-            elif ios_db_version == '6':
-                for row in cur:
-                    fmt_date = convert_date_ios6(row['date'], args.date_format)
-                    fmt_from, fmt_to = convert_address_ios6(row, args.identity, aliases)
-                    msg = {'date': fmt_date,
-                           'from': fmt_from,
-                           'to': fmt_to,
-                           'text': clean_text_msg(row['text'])}
-                    messages.append(msg)
-
-        
             output(messages, args.output, args.format, args.header)
 
         except sqlite3.Error as e:
