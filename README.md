@@ -2,6 +2,10 @@ Description
 ===========
 Backup your iPhone SMS and iMessage text messages.
 
+Works with iOS6 and iOS7.
+
+(And, it continues to work with iOS5, if anyone still finds that useful...)
+
 Why? 
 ---- 
 Your iPhone stores a copy of all your SMS and iMessage text messages in a
@@ -25,6 +29,13 @@ Transformations possible with `sms-backup.py`:
 
 How?
 ----
+Before running this script, you need to backup up your iPhone to your local
+computer. Connect it with a USB cable and launch a backup through iTunes.
+
+Even if your iPhone is set to automatically backup to iCloud, you can
+still choose to "Manually Backup Up" within iTunes, which will do a one-time
+backup to your computer, and then resume the automatic iCloud backups.
+
 Each time you sync/backup your iPhone, the SMS sqlite db file is copied to
 your computer. 
 
