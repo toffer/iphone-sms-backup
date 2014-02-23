@@ -295,7 +295,7 @@ def which_db_version(cursor):
     Return version of DB schema as string.
 
     Return '5', if iOS 5.
-    Return '6', if iOS 6.
+    Return '6', if iOS 6 or iOS 7.
 
     """
     query = "select count(*) from sqlite_master where name = 'handle'"
